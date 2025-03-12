@@ -13,3 +13,5 @@ pub-verify:
 # 2. Created an `example` folder for debugging: `mkdir example && flutter create .`
 # 3. Developed it :D (with AI)
 # 4. flutter pub publish --dry-run
+# 5. flutter pub login # You get a link, then just login.
+# 6. flutter pub publish
