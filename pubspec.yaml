@@ -1,7 +1,7 @@
 name: sonner_flutter
 description: "An opinionated toast component for Flutter. A port of @emilkowalski's sonner."
 version: 0.0.1
-homepage:
+homepage: https://github.com/blankeos/sonner_flutter
 
 environment:
   sdk: ^3.6.1

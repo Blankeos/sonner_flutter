@@ -262,6 +262,7 @@ class _ToastWidgetState extends State<_ToastWidget>
       case ToastType.info:
         return Colors.blue[700]!;
       case ToastType.normal:
+      // ignore: unreachable_switch_default
       default:
         return Colors.grey[800]!;
     }
