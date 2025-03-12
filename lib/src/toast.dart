@@ -11,7 +11,10 @@ class ToastManager extends ChangeNotifier {
   void addToast(_ToastEntry toast) {
     toasts.add(toast);
     notifyListeners();
-    Future.delayed(toast.duration, () => removeToast(toast));
+    // Only auto-dismiss if the toast is dismissible
+    if (toast.dismissible) {
+      Future.delayed(toast.duration, () => removeToast(toast));
+    }
   }
 
   void removeToast(_ToastEntry toast) {
@@ -30,8 +33,13 @@ class ToastManager extends ChangeNotifier {
 class _ToastEntry {
   final Widget widget;
   final Duration duration;
+  final bool dismissible;
 
-  _ToastEntry(this.widget, {this.duration = const Duration(seconds: 3)});
+  _ToastEntry(
+    this.widget, {
+    this.duration = const Duration(seconds: 3),
+    this.dismissible = true,
+  });
 }
 
 class Toast {
@@ -44,6 +52,7 @@ class Toast {
     ToastPosition position = ToastPosition.top,
     double offset = 32.0,
     ToastAction? action,
+    bool dismissible = true,
   }) {
     late _ToastEntry toastEntry;
 
@@ -58,10 +67,15 @@ class Toast {
         description: description,
         action: action,
         onDismiss: () => ToastManager().removeToast(toastEntry),
+        dismissible: dismissible,
       ),
     );
 
-    toastEntry = _ToastEntry(toastWidget, duration: duration);
+    toastEntry = _ToastEntry(
+      toastWidget,
+      duration: duration,
+      dismissible: dismissible,
+    );
     ToastManager().addToast(toastEntry);
   }
 
@@ -160,7 +174,12 @@ class Toast {
     required dynamic Function(T) success,
     required String error,
   }) {
-    _show(context: context, content: Text(loading));
+    // Show a loading toast that's not dismissible
+    _show(
+      context: context,
+      content: Text(loading),
+      dismissible: false,
+    );
 
     promise().then((value) {
       ToastManager().clear();
@@ -208,6 +227,7 @@ class _ToastWidget extends StatefulWidget {
   final String? description;
   final ToastAction? action;
   final VoidCallback onDismiss;
+  final bool dismissible;
 
   const _ToastWidget({
     required this.content,
@@ -215,6 +235,7 @@ class _ToastWidget extends StatefulWidget {
     this.description,
     this.action,
     required this.onDismiss,
+    this.dismissible = true,
   });
 
   @override
@@ -281,6 +302,8 @@ class _ToastWidgetState extends State<_ToastWidget>
   }
 
   void _handleVerticalDragUpdate(DragUpdateDetails details) {
+    if (!widget.dismissible) return;
+
     setState(() {
       _dragOffset =
           (_dragOffset + details.delta.dy).clamp(0.0, double.infinity);
@@ -288,6 +311,8 @@ class _ToastWidgetState extends State<_ToastWidget>
   }
 
   void _handleVerticalDragEnd(DragEndDetails details) {
+    if (!widget.dismissible) return;
+
     if (_dragOffset >= _dismissThreshold) {
       // Dismiss if dragged beyond threshold
       _fadeController.reverse().then((_) => widget.onDismiss());
@@ -325,10 +350,11 @@ class _ToastWidgetState extends State<_ToastWidget>
                   Row(
                     children: [
                       Expanded(child: widget.content),
-                      IconButton(
-                        icon: const Icon(Icons.close, color: Colors.white),
-                        onPressed: widget.onDismiss,
-                      ),
+                      if (widget.dismissible)
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Colors.white),
+                          onPressed: widget.onDismiss,
+                        ),
                     ],
                   ),
                   if (widget.description != null)
