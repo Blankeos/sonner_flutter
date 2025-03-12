@@ -222,28 +222,45 @@ class _ToastWidget extends StatefulWidget {
 }
 
 class _ToastWidgetState extends State<_ToastWidget>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
+    with TickerProviderStateMixin {
+  late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
+  late AnimationController _dragController;
+  late Animation<double> _dragAnimation;
   double _dragOffset = 0.0;
-  static const double _dismissThreshold = 20.0; // Threshold for dismissal
+  static const double _dismissThreshold = 30.0;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
+    // Fade animation for entry/exit
+    _fadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
     _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+      CurvedAnimation(parent: _fadeController, curve: Curves.easeOut),
     );
-    _controller.forward();
+    _fadeController.forward();
+
+    // Drag animation for smooth return
+    _dragController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+    _dragAnimation = Tween<double>(begin: 0, end: 0).animate(
+      CurvedAnimation(parent: _dragController, curve: Curves.easeOut),
+    )..addListener(() {
+        setState(() {
+          _dragOffset = _dragAnimation.value;
+        });
+      });
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _fadeController.dispose();
+    _dragController.dispose();
     super.dispose();
   }
 
@@ -265,7 +282,6 @@ class _ToastWidgetState extends State<_ToastWidget>
 
   void _handleVerticalDragUpdate(DragUpdateDetails details) {
     setState(() {
-      // Only allow dragging downwards (positive offset)
       _dragOffset =
           (_dragOffset + details.delta.dy).clamp(0.0, double.infinity);
     });
@@ -274,12 +290,13 @@ class _ToastWidgetState extends State<_ToastWidget>
   void _handleVerticalDragEnd(DragEndDetails details) {
     if (_dragOffset >= _dismissThreshold) {
       // Dismiss if dragged beyond threshold
-      _controller.reverse().then((_) => widget.onDismiss());
+      _fadeController.reverse().then((_) => widget.onDismiss());
     } else {
-      // Snap back to original position
-      setState(() {
-        _dragOffset = 0.0;
-      });
+      // Animate back to original position
+      _dragAnimation = Tween<double>(begin: _dragOffset, end: 0).animate(
+        CurvedAnimation(parent: _dragController, curve: Curves.easeOut),
+      );
+      _dragController.forward(from: 0.0);
     }
   }
 
@@ -288,7 +305,7 @@ class _ToastWidgetState extends State<_ToastWidget>
     return FadeTransition(
       opacity: _fadeAnimation,
       child: Transform.translate(
-        offset: Offset(0, _dragOffset), // Apply drag offset
+        offset: Offset(0, _dragOffset),
         child: GestureDetector(
           onVerticalDragUpdate: _handleVerticalDragUpdate,
           onVerticalDragEnd: _handleVerticalDragEnd,
