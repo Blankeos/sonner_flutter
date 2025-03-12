@@ -2,35 +2,31 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 
 class ToastManager extends ChangeNotifier {
-  // Singleton pattern to ensure a single instance
   static final ToastManager _instance = ToastManager._internal();
   factory ToastManager() => _instance;
   ToastManager._internal();
 
-  // List to hold toast entries
   final List<_ToastEntry> toasts = [];
 
-  // Add a toast and notify listeners
   void addToast(_ToastEntry toast) {
     toasts.add(toast);
-    notifyListeners(); // Trigger rebuild when a toast is added
+    notifyListeners();
     Future.delayed(toast.duration, () => removeToast(toast));
   }
 
-  // Remove a toast and notify listeners
   void removeToast(_ToastEntry toast) {
-    toasts.remove(toast);
-    notifyListeners(); // Trigger rebuild when a toast is removed
+    if (toasts.contains(toast)) {
+      toasts.remove(toast);
+      notifyListeners();
+    }
   }
 
-  // Clear all toasts and notify listeners
   void clear() {
     toasts.clear();
-    notifyListeners(); // Trigger rebuild when toasts are cleared
+    notifyListeners();
   }
 }
 
-// A simple class to represent a toast entry (assuming this exists in your code)
 class _ToastEntry {
   final Widget widget;
   final Duration duration;
@@ -49,7 +45,7 @@ class Toast {
     double offset = 32.0,
     ToastAction? action,
   }) {
-    late _ToastEntry toastEntry; // Declare toastEntry with 'late'
+    late _ToastEntry toastEntry;
 
     final toastWidget = Positioned(
       top: position == ToastPosition.top ? offset : null,
@@ -61,13 +57,11 @@ class Toast {
         type: type,
         description: description,
         action: action,
-        onDismiss: () =>
-            ToastManager().removeToast(toastEntry), // Now safe to reference
+        onDismiss: () => ToastManager().removeToast(toastEntry),
       ),
     );
 
-    toastEntry = _ToastEntry(toastWidget,
-        duration: duration); // Initialize toastEntry with named parameter
+    toastEntry = _ToastEntry(toastWidget, duration: duration);
     ToastManager().addToast(toastEntry);
   }
 
@@ -230,7 +224,9 @@ class _ToastWidget extends StatefulWidget {
 class _ToastWidgetState extends State<_ToastWidget>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _animation;
+  late Animation<double> _fadeAnimation;
+  double _dragOffset = 0.0;
+  static const double _dismissThreshold = 20.0; // Threshold for dismissal
 
   @override
   void initState() {
@@ -239,7 +235,7 @@ class _ToastWidgetState extends State<_ToastWidget>
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
-    _animation = Tween<double>(begin: 0, end: 1).animate(
+    _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeOut),
     );
     _controller.forward();
@@ -262,58 +258,84 @@ class _ToastWidgetState extends State<_ToastWidget>
       case ToastType.info:
         return Colors.blue[700]!;
       case ToastType.normal:
-      // ignore: unreachable_switch_default
       default:
         return Colors.grey[800]!;
+    }
+  }
+
+  void _handleVerticalDragUpdate(DragUpdateDetails details) {
+    setState(() {
+      // Only allow dragging downwards (positive offset)
+      _dragOffset =
+          (_dragOffset + details.delta.dy).clamp(0.0, double.infinity);
+    });
+  }
+
+  void _handleVerticalDragEnd(DragEndDetails details) {
+    if (_dragOffset >= _dismissThreshold) {
+      // Dismiss if dragged beyond threshold
+      _controller.reverse().then((_) => widget.onDismiss());
+    } else {
+      // Snap back to original position
+      setState(() {
+        _dragOffset = 0.0;
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return FadeTransition(
-      opacity: _animation,
-      child: Material(
-        elevation: 4,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: _getBackgroundColor(),
+      opacity: _fadeAnimation,
+      child: Transform.translate(
+        offset: Offset(0, _dragOffset), // Apply drag offset
+        child: GestureDetector(
+          onVerticalDragUpdate: _handleVerticalDragUpdate,
+          onVerticalDragEnd: _handleVerticalDragEnd,
+          child: Material(
+            elevation: 4,
             borderRadius: BorderRadius.circular(8),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: _getBackgroundColor(),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(child: widget.content),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white),
-                    onPressed: widget.onDismiss,
+                  Row(
+                    children: [
+                      Expanded(child: widget.content),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        onPressed: widget.onDismiss,
+                      ),
+                    ],
                   ),
+                  if (widget.description != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        widget.description!,
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                    ),
+                  if (widget.action != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: TextButton(
+                        onPressed: widget.action!.onClick,
+                        child: Text(
+                          widget.action!.label,
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    ),
                 ],
               ),
-              if (widget.description != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    widget.description!,
-                    style: const TextStyle(color: Colors.white70),
-                  ),
-                ),
-              if (widget.action != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: TextButton(
-                    onPressed: widget.action!.onClick,
-                    child: Text(
-                      widget.action!.label,
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                  ),
-                ),
-            ],
+            ),
           ),
         ),
       ),
